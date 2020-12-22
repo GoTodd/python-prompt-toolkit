@@ -38,6 +38,7 @@ from typing import (
     overload,
 )
 
+from prompt_toolkit.alias import AliasList
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.cache import SimpleCache
 from prompt_toolkit.clipboard import Clipboard, InMemoryClipboard
@@ -215,6 +216,7 @@ class Application(Generic[_AppResult]):
         on_invalidate: Optional[ApplicationEventHandler] = None,
         before_render: Optional[ApplicationEventHandler] = None,
         after_render: Optional[ApplicationEventHandler] = None,
+        aliases: Optional[AliasList] = None,
         # I/O.
         input: Optional[Input] = None,
         output: Optional[Output] = None,
@@ -265,6 +267,8 @@ class Application(Generic[_AppResult]):
         self.on_reset = Event(self, on_reset)
         self.before_render = Event(self, before_render)
         self.after_render = Event(self, after_render)
+
+        self.aliases = aliases
 
         # I/O.
         session = get_app_session()
@@ -633,7 +637,6 @@ class Application(Generic[_AppResult]):
             self.future = f  # XXX: make sure to set this before calling '_redraw'.
             self.loop = loop
             self.context = contextvars.copy_context()
-
             # Counter for cancelling 'flush' timeouts. Every time when a key is
             # pressed, we start a 'flush' timer for flushing our escape key. But
             # when any subsequent input is received, a new timer is started and
@@ -704,6 +707,8 @@ class Application(Generic[_AppResult]):
                 # Wait for UI to finish.
                 try:
                     result = await f
+                    if self.aliases:
+                        result = self.aliases.resolve(result)
                 finally:
                     # In any case, when the application finishes.
                     # (Successful, or because of an error.)

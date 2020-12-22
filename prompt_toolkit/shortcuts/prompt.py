@@ -39,6 +39,7 @@ from typing import (
     cast,
 )
 
+from prompt_toolkit.alias import AliasList
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.auto_suggest import AutoSuggest, DynamicAutoSuggest
@@ -405,6 +406,7 @@ class PromptSession(Generic[_T]):
         erase_when_done: bool = False,
         tempfile_suffix: Optional[Union[str, Callable[[], str]]] = ".txt",
         tempfile: Optional[Union[str, Callable[[], str]]] = None,
+        aliases: Optional[AliasList] = None,
         refresh_interval: float = 0,
         input: Optional[Input] = None,
         output: Optional[Output] = None,
@@ -457,6 +459,7 @@ class PromptSession(Generic[_T]):
         self.reserve_space_for_menu = reserve_space_for_menu
         self.tempfile_suffix = tempfile_suffix
         self.tempfile = tempfile
+        self.aliases = aliases
 
         # Create buffers, layout and Application.
         self.history = history
@@ -750,6 +753,7 @@ class PromptSession(Generic[_T]):
             reverse_vi_search_direction=True,
             color_depth=lambda: self.color_depth,
             refresh_interval=self.refresh_interval,
+            aliases=self.aliases,
             input=self._input,
             output=self._output,
         )
@@ -882,6 +886,7 @@ class PromptSession(Generic[_T]):
         enable_open_in_editor: Optional[FilterOrBool] = None,
         tempfile_suffix: Optional[Union[str, Callable[[], str]]] = None,
         tempfile: Optional[Union[str, Callable[[], str]]] = None,
+        aliases: Optional[AliasList] = None,
         # Following arguments are specific to the current `prompt()` call.
         default: Union[str, Document] = "",
         accept_default: bool = False,
@@ -998,6 +1003,8 @@ class PromptSession(Generic[_T]):
             self.tempfile_suffix = tempfile_suffix
         if tempfile is not None:
             self.tempfile = tempfile
+        if aliases is not None:
+            self.aliases = aliases
 
         self._add_pre_run_callables(pre_run, accept_default)
         self.default_buffer.reset(
@@ -1009,7 +1016,6 @@ class PromptSession(Generic[_T]):
         # dumb prompt.
         if self._output is None and is_dumb_terminal():
             return get_event_loop().run_until_complete(self._dumb_prompt(self.message))
-
         return self.app.run(set_exception_handler=set_exception_handler)
 
     async def _dumb_prompt(self, message: AnyFormattedText = "") -> _T:
@@ -1051,6 +1057,9 @@ class PromptSession(Generic[_T]):
 
         self.default_buffer.on_text_changed += on_text_changed
         result = await application.run_async()
+
+        if self.aliases:
+            result = self.aliases.resolve(result)
 
         # Render line ending.
         self.output.write("\r\n")
@@ -1368,6 +1377,7 @@ def prompt(
     enable_open_in_editor: Optional[FilterOrBool] = None,
     tempfile_suffix: Optional[Union[str, Callable[[], str]]] = None,
     tempfile: Optional[Union[str, Callable[[], str]]] = None,
+    aliases: Optional[AliasList] = None,
     # Following arguments are specific to the current `prompt()` call.
     default: str = "",
     accept_default: bool = False,
@@ -1379,7 +1389,7 @@ def prompt(
     """
     # The history is the only attribute that has to be passed to the
     # `PromptSession`, it can't be passed into the `prompt()` method.
-    session: PromptSession[str] = PromptSession(history=history)
+    session: PromptSession[str] = PromptSession(history=history, aliases=aliases)
 
     return session.prompt(
         message,
@@ -1421,6 +1431,7 @@ def prompt(
         default=default,
         accept_default=accept_default,
         pre_run=pre_run,
+        aliases=aliases
     )
 
 
